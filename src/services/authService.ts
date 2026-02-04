@@ -262,6 +262,33 @@ class AuthService {
     const credentials = await this.getSavedCredentials();
     return credentials !== null;
   }
+
+  // Obtener perfil del usuario actual
+  async getProfile() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        return { success: false, error: 'No hay usuario autenticado' };
+      }
+
+      const { data: perfil, error } = await supabase
+        .from('perfiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error obteniendo perfil:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, perfil };
+    } catch (error: any) {
+      console.error('Error en getProfile:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 export default new AuthService();

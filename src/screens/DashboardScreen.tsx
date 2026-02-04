@@ -51,68 +51,84 @@ export default function DashboardScreen({ navigation }: any) {
   }, [fabOpen]);
 
   const cargarDatos = async () => {
-    setLoading(true);
-    
-    // Obtener perfil del usuario
-    const perfilResult = await authService.getProfile();
-    if (perfilResult.success && perfilResult.perfil) {
-      setNombreUsuario(perfilResult.perfil.nombre);
+    try {
+      setLoading(true);
+      console.log('🔄 Cargando datos del dashboard...');
+      
+      // Obtener perfil del usuario
+      console.log('1️⃣ Obteniendo perfil...');
+      const perfilResult = await authService.getProfile();
+      if (perfilResult.success && perfilResult.perfil) {
+        setNombreUsuario(perfilResult.perfil.nombre);
+        console.log('✅ Perfil obtenido:', perfilResult.perfil.nombre);
+      } else {
+        console.log('⚠️ No se pudo obtener perfil:', perfilResult.error);
+      }
+      
+      // Obtener préstamos y deudas
+      console.log('2️⃣ Obteniendo préstamos y deudas...');
+      const [prestamosResult, deudasResult] = await Promise.all([
+        prestamosService.obtenerMisPrestamos(),
+        prestamosService.obtenerMisDeudas(),
+      ]);
+
+      console.log('✅ Préstamos:', prestamosResult.prestamos?.length || 0);
+      console.log('✅ Deudas:', deudasResult.deudas?.length || 0);
+
+      const prestamos = prestamosResult.prestamos || [];
+      const deudas = deudasResult.deudas || [];
+
+      // Calcular totales
+      const totalPrestado = prestamos.reduce((sum: number, p: any) => sum + parseFloat(p.monto_pendiente || 0), 0);
+      const totalAdeudado = deudas.reduce((sum: number, d: any) => sum + parseFloat(d.monto_pendiente || 0), 0);
+
+      // Obtener próximas cuotas de préstamos (a cobrar)
+      const cuotasCobro = prestamos.flatMap((p: any) => 
+        (p.cuotas || []).filter((c: any) => c.estado === 'pendiente').map((c: any) => ({
+          id: c.id,
+          tipo: 'cobro',
+          persona: `${p.deudor_nombre} ${p.deudor_apellido}`,
+          monto: parseFloat(c.monto),
+          fecha: c.fecha_vencimiento,
+          prestamoId: p.id,
+        }))
+      );
+
+      // Obtener próximas cuotas de deudas (a pagar)
+      const cuotasPago = deudas.flatMap((d: any) => 
+        (d.cuotas || []).filter((c: any) => c.estado === 'pendiente').map((c: any) => ({
+          id: c.id,
+          tipo: 'pago',
+          persona: `${d.prestamista_nombre} ${d.prestamista_apellido}`,
+          monto: parseFloat(c.monto),
+          fecha: c.fecha_vencimiento,
+          deudaId: d.id,
+        }))
+      );
+
+      // Combinar y ordenar por fecha
+      const todasCuotas = [...cuotasCobro, ...cuotasPago].sort(
+        (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
+      ).slice(0, 5); // Solo las primeras 5
+
+      // Calcular próximos cobros y pagos
+      const proximosCobros = cuotasCobro.length > 0 ? cuotasCobro[0].monto : 0;
+      const proximosPagos = cuotasPago.length > 0 ? cuotasPago[0].monto : 0;
+
+      setBalance({
+        totalPrestado,
+        totalAdeudado,
+        proximosCobros,
+        proximosPagos,
+      });
+      setProximasCuotas(todasCuotas);
+      
+      console.log('✅ Dashboard cargado exitosamente');
+    } catch (error) {
+      console.error('❌ Error cargando datos del dashboard:', error);
+    } finally {
+      setLoading(false);
     }
-    
-    // Obtener préstamos y deudas
-    const [prestamosResult, deudasResult] = await Promise.all([
-      prestamosService.obtenerMisPrestamos(),
-      prestamosService.obtenerMisDeudas(),
-    ]);
-
-    const prestamos = prestamosResult.prestamos || [];
-    const deudas = deudasResult.deudas || [];
-
-    // Calcular totales
-    const totalPrestado = prestamos.reduce((sum: number, p: any) => sum + parseFloat(p.monto_pendiente || 0), 0);
-    const totalAdeudado = deudas.reduce((sum: number, d: any) => sum + parseFloat(d.monto_pendiente || 0), 0);
-
-    // Obtener próximas cuotas de préstamos (a cobrar)
-    const cuotasCobro = prestamos.flatMap((p: any) => 
-      (p.cuotas || []).filter((c: any) => c.estado === 'pendiente').map((c: any) => ({
-        id: c.id,
-        tipo: 'cobro',
-        persona: `${p.deudor_nombre} ${p.deudor_apellido}`,
-        monto: parseFloat(c.monto),
-        fecha: c.fecha_vencimiento,
-        prestamoId: p.id,
-      }))
-    );
-
-    // Obtener próximas cuotas de deudas (a pagar)
-    const cuotasPago = deudas.flatMap((d: any) => 
-      (d.cuotas || []).filter((c: any) => c.estado === 'pendiente').map((c: any) => ({
-        id: c.id,
-        tipo: 'pago',
-        persona: `${d.prestamista_nombre} ${d.prestamista_apellido}`,
-        monto: parseFloat(c.monto),
-        fecha: c.fecha_vencimiento,
-        deudaId: d.id,
-      }))
-    );
-
-    // Combinar y ordenar por fecha
-    const todasCuotas = [...cuotasCobro, ...cuotasPago].sort(
-      (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
-    ).slice(0, 5); // Solo las primeras 5
-
-    // Calcular próximos cobros y pagos
-    const proximosCobros = cuotasCobro.length > 0 ? cuotasCobro[0].monto : 0;
-    const proximosPagos = cuotasPago.length > 0 ? cuotasPago[0].monto : 0;
-
-    setBalance({
-      totalPrestado,
-      totalAdeudado,
-      proximosCobros,
-      proximosPagos,
-    });
-    setProximasCuotas(todasCuotas);
-    setLoading(false);
   };
 
   if (loading) {
