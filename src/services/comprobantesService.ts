@@ -143,6 +143,19 @@ class ComprobantesService {
    */
   async aprobarComprobante(cuotaId: string): Promise<ActualizarEstadoComprobanteResult> {
     try {
+      // 1. Obtener el préstamo_id de esta cuota
+      const { data: cuota, error: cuotaError } = await supabase
+        .from('cuotas')
+        .select('prestamo_id')
+        .eq('id', cuotaId)
+        .single();
+
+      if (cuotaError) {
+        console.error('Error al obtener cuota:', cuotaError);
+        return { success: false, error: cuotaError.message };
+      }
+
+      // 2. Aprobar la cuota
       const { error } = await supabase
         .from('cuotas')
         .update({
@@ -156,6 +169,33 @@ class ComprobantesService {
       if (error) {
         console.error('Error al aprobar comprobante:', error);
         return { success: false, error: error.message };
+      }
+
+      // 3. Verificar si todas las cuotas del préstamo están pagadas
+      const { data: todasCuotas, error: cuotasError } = await supabase
+        .from('cuotas')
+        .select('estado')
+        .eq('prestamo_id', cuota.prestamo_id);
+
+      if (cuotasError) {
+        console.error('Error al obtener cuotas:', cuotasError);
+        // No fallar si esto no funciona, la cuota ya se aprobó
+        return { success: true };
+      }
+
+      // 4. Si TODAS las cuotas están pagadas, actualizar el préstamo a "pagado"
+      const todasPagadas = todasCuotas?.every(c => c.estado === 'pagada');
+      
+      if (todasPagadas) {
+        console.log('✅ Todas las cuotas pagadas, actualizando préstamo a PAGADO');
+        const { error: prestamoError } = await supabase
+          .from('prestamos')
+          .update({ estado: 'pagado' })
+          .eq('id', cuota.prestamo_id);
+
+        if (prestamoError) {
+          console.error('Error al actualizar estado del préstamo:', prestamoError);
+        }
       }
 
       return { success: true };

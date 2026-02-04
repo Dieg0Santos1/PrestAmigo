@@ -108,30 +108,42 @@ export default function DebtDetailScreen({ route, navigation }: any) {
     setUploading(false);
 
     if (result.success) {
-      // Cancelar notificación de esta cuota ya que se subió comprobante
-      await notificationsService.cancelNotificationForCuota(selectedCuota.id);
-      
-      // Obtener el nombre del deudor actual para la notificación
-      const perfilResult = await authService.getProfile();
-      if (perfilResult.success && perfilResult.perfil && deuda.prestamista_id) {
-        const deudorNombre = `${perfilResult.perfil.nombre} ${perfilResult.perfil.apellido}`;
-        // Enviar notificación al prestamista
-        await notificationsService.sendProofUploadedNotification(
-          deuda.prestamista_id,
-          deudorNombre,
-          selectedCuota.numero,
-          selectedCuota.monto
-        );
-      }
-      
+      // Mostrar mensaje y cerrar modal inmediatamente
       Alert.alert(
         '✅ Comprobante enviado',
-        'Tu comprobante está en revisión. El prestamista lo verificará pronto.'
+        'Tu comprobante está en revisión. El prestamista lo verificará pronto.',
+        [{
+          text: 'OK',
+          onPress: () => {
+            setModalVisible(false);
+            setImagePreview(null);
+            setSelectedCuota(null);
+            cargarDetalle();
+          }
+        }]
       );
-      setModalVisible(false);
-      setImagePreview(null);
-      setSelectedCuota(null);
-      cargarDetalle();
+      
+      // Ejecutar notificaciones en segundo plano (sin bloquear UI)
+      (async () => {
+        try {
+          // Cancelar notificación de esta cuota
+          await notificationsService.cancelNotificationForCuota(selectedCuota.id);
+          
+          // Obtener el nombre del deudor y enviar notificación al prestamista
+          const perfilResult = await authService.getProfile();
+          if (perfilResult.success && perfilResult.perfil && deuda.prestamista_id) {
+            const deudorNombre = `${perfilResult.perfil.nombre} ${perfilResult.perfil.apellido}`;
+            await notificationsService.sendProofUploadedNotification(
+              deuda.prestamista_id,
+              deudorNombre,
+              selectedCuota.numero,
+              selectedCuota.monto
+            );
+          }
+        } catch (error) {
+          console.error('Error al enviar notificación:', error);
+        }
+      })();
     } else {
       Alert.alert('Error', result.error || 'No se pudo subir el comprobante');
     }

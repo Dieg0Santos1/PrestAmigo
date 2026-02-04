@@ -13,6 +13,7 @@ import { Card, IconButton, FAB, Portal } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '../theme/colors';
 import prestamosService from '../services/prestamosService';
+import authService from '../services/authService';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,6 +27,7 @@ export default function DashboardScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [fabOpen, setFabOpen] = useState(false);
   const animatedValue = React.useRef(new Animated.Value(0)).current;
+  const [nombreUsuario, setNombreUsuario] = useState<string>('Usuario');
   const [balance, setBalance] = useState({
     totalPrestado: 0,
     totalAdeudado: 0,
@@ -50,6 +52,12 @@ export default function DashboardScreen({ navigation }: any) {
 
   const cargarDatos = async () => {
     setLoading(true);
+    
+    // Obtener perfil del usuario
+    const perfilResult = await authService.getProfile();
+    if (perfilResult.success && perfilResult.perfil) {
+      setNombreUsuario(perfilResult.perfil.nombre);
+    }
     
     // Obtener préstamos y deudas
     const [prestamosResult, deudasResult] = await Promise.all([
@@ -126,7 +134,7 @@ export default function DashboardScreen({ navigation }: any) {
         >
           <View style={styles.headerContent}>
             <View style={styles.headerTextContainer}>
-              <Text style={styles.greeting}>Hola, {user?.user_metadata?.nombre || 'Usuario'} 👋</Text>
+              <Text style={styles.greeting}>Hola, {nombreUsuario} 👋</Text>
               <Text style={styles.subtitle}>Tu balance general</Text>
             </View>
             <IconButton
